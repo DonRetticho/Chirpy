@@ -8,15 +8,26 @@ import (
 	"github.com/DonRetticho/Chirpy/internal/database"
 )
 
-func (cfg *apiConfig) handlerUsersCreate(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
 	}
 
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "access token is malformed or missing")
+		return
+	}
+	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "access token is malformed or missing")
+		return
+	}
+
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "something went wrong")
 		return
@@ -28,9 +39,10 @@ func (cfg *apiConfig) handlerUsersCreate(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	dbUser, err := cfg.dbQueries.CreateUser(r.Context(), database.CreateUserParams{
+	dbUser, err := cfg.dbQueries.UpdateUser(r.Context(), database.UpdateUserParams{
 		Email:          params.Email,
 		HashedPassword: hashedPassword,
+		ID:             userID,
 	})
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "internal server error")
@@ -43,6 +55,6 @@ func (cfg *apiConfig) handlerUsersCreate(w http.ResponseWriter, r *http.Request)
 		Email:       dbUser.Email,
 		IsChirpyRed: dbUser.IsChirpyRed,
 	}
-	respondWithJSON(w, http.StatusCreated, responseUser)
+	respondWithJSON(w, http.StatusOK, responseUser)
 
 }

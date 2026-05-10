@@ -5,19 +5,29 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/DonRetticho/Chirpy/internal/auth"
 	"github.com/DonRetticho/Chirpy/internal/database"
-	"github.com/google/uuid"
 )
 
 func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
+	}
+
+	bearerToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "no authorization")
+		return
+	}
+	validatedUserID, err := auth.ValidateJWT(bearerToken, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "no authorization")
+		return
 	}
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		log.Printf("DeleteAllUsers error: %v", err)
 		respondWithError(w, http.StatusBadRequest, "something went wrong")
@@ -31,7 +41,7 @@ func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request
 
 	cleanedBody := getCleanedBody(params.Body)
 
-	dbChirp, err := cfg.dbQueries.CreateChirp(r.Context(), database.CreateChirpParams{Body: cleanedBody, UserID: params.UserID})
+	dbChirp, err := cfg.dbQueries.CreateChirp(r.Context(), database.CreateChirpParams{Body: cleanedBody, UserID: validatedUserID})
 	if err != nil {
 		log.Printf("DeleteAllChirps error: %v", err)
 		respondWithError(w, http.StatusInternalServerError, "internal server error")
